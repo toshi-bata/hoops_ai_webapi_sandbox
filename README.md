@@ -80,6 +80,9 @@ Once started, the interactive API docs (Swagger UI) are available at `http://loc
 
 ## Testing from the terminal
 
+Replace `localhost` with the server's IP address when testing from a remote machine.
+Make sure port `8000` is open on the server's firewall beforehand.
+
 ### Health check
 
 ```bash
