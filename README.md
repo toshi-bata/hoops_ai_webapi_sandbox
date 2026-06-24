@@ -38,7 +38,7 @@ cp .env.example .env
 |---|---|---|
 | `HOOPS_AI_LICENSE` | ✅ | HOOPS AI license key |
 | `HOOPS_AI_NOTEBOOK_DIR` | MFR only | Path to the notebooks directory |
-| `HOOPS_AI_MFR_MODEL_NAME` | MFR only | Trained model filename under `packages/trained_ml_models/` (e.g. `GraphNodeClassification_MFR_cadsynth.ckpt`) |
+| `HOOPS_AI_MFR_MODEL_NAME` | MFR only | Trained model filename under `packages/trained_ml_models/` (e.g. `ts3d_162k_mfr.ckpt`) |
 
 When using the MFR endpoint, the trained model must exist at:
 
