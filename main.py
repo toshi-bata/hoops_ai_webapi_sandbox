@@ -2,8 +2,8 @@
 hoops_ai_webapi_sandbox — minimal FastAPI sandbox for HOOPS AI WebAPI verification.
 
 Endpoints:
-  POST /cad/load                        Upload a CAD file → BRep info (tests Exchange)
-  GET  /mfr/dataset/table-of-contents   Load MFR dataset → table of contents
+  POST /cad/load        Upload a CAD file → BRep info (tests Exchange)
+  POST /mfr/inference   Upload a CAD file → MFR feature predictions
 """
 
 import sys
@@ -26,7 +26,7 @@ app = FastAPI(
     description=(
         "Minimal sandbox to verify HOOPS AI WebAPI capabilities.\n\n"
         "- `POST /cad/load` — upload a CAD file, load it with HOOPSLoader, receive BRep attributes\n"
-        "- `GET /mfr/dataset/table-of-contents` — load the configured MFR dataset and return its TOC"
+        "- `POST /mfr/inference` — upload a CAD file, run MFR inference, receive per-face feature predictions"
     ),
     version="0.1.0",
     lifespan=lifespan,

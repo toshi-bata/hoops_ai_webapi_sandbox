@@ -4,7 +4,7 @@ Minimal helpers shared across routers.
 Environment variables (place in .env):
   HOOPS_AI_LICENSE          - license key (required)
   HOOPS_AI_NOTEBOOK_DIR     - path to the notebooks directory (required for MFR)
-  HOOPS_AI_MFR_FLOW_NAME    - MFR flow name, e.g. ETL_CADSYNTH_training_b2 (required for MFR)
+  HOOPS_AI_MFR_MODEL_NAME   - trained model filename under packages/trained_ml_models/ (required for MFR)
 """
 
 import io
@@ -12,12 +12,43 @@ import os
 import pathlib
 import shutil
 import ssl
+import uuid
 from contextlib import redirect_stdout
 from typing import Any
 
 APP_ROOT = pathlib.Path(__file__).resolve().parent
 ENV_FILE_PATH = APP_ROOT / ".env"
 UPLOAD_DIR = APP_ROOT / "uploads"
+
+_mfr_inference_model = None
+
+DEFAULT_MFR_LABELS: dict[int, str] = {
+    0: "no-label",
+    1: "rectangular_through_slot",
+    2: "triangular_through_slot",
+    3: "rectangular_passage",
+    4: "triangular_passage",
+    5: "6sides_passage",
+    6: "rectangular_through_step",
+    7: "2sides_through_step",
+    8: "slanted_through_step",
+    9: "rectangular_blind_step",
+    10: "triangular_blind_step",
+    11: "rectangular_blind_slot",
+    12: "rectangular_pocket",
+    13: "triangular_pocket",
+    14: "6sides_pocket",
+    15: "chamfer",
+    16: "circular_through_slot",
+    17: "through_hole",
+    18: "circular_blind_step",
+    19: "horizontal_circular_end_blind_slot",
+    20: "vertical_circular_end_blind_slot",
+    21: "circular_end_pocket",
+    22: "o-ring",
+    23: "blind_hole",
+    24: "fillet",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -123,44 +154,49 @@ def load_brep_info(cad_file_path: pathlib.Path) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# MFR: dataset explorer
+# MFR: inference
 # ---------------------------------------------------------------------------
 
-def _create_mfr_dataset_explorer():
-    """Instantiate DatasetExplorer for the configured MFR flow."""
-    if os.name == "nt":
-        # Suppress SSL certificate loading issues on Windows
-        original_load_default_certs = ssl.SSLContext.load_default_certs
-        ssl.SSLContext.load_default_certs = lambda self, purpose=ssl.Purpose.SERVER_AUTH: None
-        try:
-            from hoops_ai.dataset import DatasetExplorer
-        finally:
-            ssl.SSLContext.load_default_certs = original_load_default_certs
-    else:
-        from hoops_ai.dataset import DatasetExplorer
-
-    notebooks_dir = pathlib.Path(get_required_env("HOOPS_AI_NOTEBOOK_DIR"))
-    flow_name = get_required_env("HOOPS_AI_MFR_FLOW_NAME")
-    flow_root = notebooks_dir / "out" / "flows" / flow_name
-
-    return DatasetExplorer(
-        merged_store_path=str(flow_root / f"{flow_name}.dataset"),
-        parquet_file_path=str(flow_root / f"{flow_name}.infoset"),
-        parquet_file_attribs=str(flow_root / f"{flow_name}.attribset"),
-        dask_client_params={"processes": False},
-    )
+def _get_mfr_inference_model():
+    global _mfr_inference_model
+    if _mfr_inference_model is None:
+        _mfr_inference_model = _create_mfr_inference_model()
+    return _mfr_inference_model
 
 
-def get_mfr_table_of_contents() -> dict[str, Any]:
-    """Load the MFR dataset and return the table of contents."""
+def _create_mfr_inference_model():
+    from hoops_ai.cadaccess import HOOPSLoader
+    from hoops_ai.ml.EXPERIMENTAL import FlowInference, GraphNodeClassification
+
     load_env_file()
-    explorer = _create_mfr_dataset_explorer()
+    notebooks_dir = pathlib.Path(get_required_env("HOOPS_AI_NOTEBOOK_DIR"))
+    model_name = get_required_env("HOOPS_AI_MFR_MODEL_NAME")
+    trained_model = notebooks_dir.parent / "packages" / "trained_ml_models" / model_name
+    output_dir = notebooks_dir / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    output = io.StringIO()
-    with redirect_stdout(output):
-        result = explorer.print_table_of_contents()
+    loader = HOOPSLoader()
+    inference_model = FlowInference(
+        cad_loader=loader,
+        flowmodel=GraphNodeClassification(result_dir=str(output_dir)),
+    )
+    inference_model.load_from_checkpoint(trained_model)
+    return inference_model
 
-    response: dict[str, Any] = {"table_of_contents": output.getvalue()}
-    if result is not None:
-        response["result"] = json_safe(result)
-    return response
+
+def run_mfr_inference(cad_file_path: pathlib.Path) -> dict[str, Any]:
+    """Run MFR inference on a CAD file and return per-face feature predictions."""
+    model = _get_mfr_inference_model()
+    ml_input = model.preprocess(str(cad_file_path))
+    predictions, probabilities = model.predict_and_postprocess(ml_input)
+
+    preds = json_safe(predictions)
+    named = [DEFAULT_MFR_LABELS.get(int(p), str(p)) for p in preds]
+
+    return {
+        "filename": cad_file_path.name,
+        "face_count": len(preds),
+        "predictions": preds,
+        "feature_names": named,
+        "probabilities": json_safe(probabilities),
+    }
