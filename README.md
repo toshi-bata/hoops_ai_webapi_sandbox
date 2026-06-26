@@ -173,7 +173,7 @@ hoops_ai_webapi_sandbox/
 ├── core.py              # Shared helpers (.env loading, HOOPS init, BRep/MFR logic)
 ├── routers/
 │   ├── cad.py           # POST /cad/load
-│   └── mfr.py           # GET /mfr/dataset/table-of-contents
+│   └── mfr.py           # POST /mfr/inference
 ├── requirements.txt
 ├── .env.example
 └── README.md
